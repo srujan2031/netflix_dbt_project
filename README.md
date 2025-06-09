@@ -32,18 +32,38 @@ All files are stored in Amazon S3 under the `raw/` folder for ingestion into Sno
 
 ## 🏧 Architecture Diagram
 
-```mermaid
-graph TD
-  A[Netflix CSVs] --> B[Amazon S3 (Raw Data)]
-  B --> C[Snowflake External Stage]
-  C --> D[Raw Tables via COPY INTO]
-  D --> E[dbt Raw Layer]
-  E --> F[Staging Layer]
-  F --> G[Dimensional and Fact Models]
-  G --> H[Snapshots for SCD2 Tracking]
-  H --> I[Mart Models]
-  I --> J[Looker Studio / BI Tools]
+Below is the high-level architecture of the Netflix Analytics Pipeline:
+
+* **Step 1:** Raw Netflix CSVs are extracted and stored in **Amazon S3**
+* **Step 2:** Snowflake uses an **external stage** to read data from S3
+* **Step 3:** Data is loaded into raw tables using **COPY INTO**
+* **Step 4:** dbt transforms the data through multiple layers: `raw` → `staging` → `fact/dim` → `mart`
+* **Step 5:** dbt snapshots track changes (SCD Type 2)
+* **Step 6:** Final data is served to **Looker Studio** or other BI tools for reporting
+
 ```
+Netflix CSVs
+   ↓
+Amazon S3 (Raw Data)
+   ↓
+Snowflake External Stage
+   ↓
+Raw Tables (via COPY INTO)
+   ↓
+dbt Raw Models
+   ↓
+dbt Staging Models
+   ↓
+Dimensional & Fact Models
+   ↓
+dbt Snapshots (SCD Type 2)
+   ↓
+Mart Tables
+   ↓
+Looker Studio / Power BI / Tableau
+```
+
+This architecture ensures a clean ELT workflow using cloud-native tools.
 
 ---
 
