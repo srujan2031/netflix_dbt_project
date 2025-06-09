@@ -34,13 +34,14 @@ All files are stored in Amazon S3 under the `raw/` folder for ingestion into Sno
 
 ```mermaid
 graph TD
-    A[Amazon S3 - Raw CSV Files] --> B[Snowflake External Stage]
-    B --> C[Raw Tables via COPY INTO]
-    C --> D[dbt Raw Models]
-    D --> E[dbt Staging Models]
-    E --> F[dbt Dimensional & Fact Models]
-    F --> G[dbt Mart-Level Reporting Tables]
-    G --> H[Looker Studio Dashboards]
+    A[Netflix CSV Data] --> B[Amazon S3 (Raw Storage)]
+    B --> C[Snowflake Stage]
+    C --> D[Raw Tables via COPY INTO]
+    D --> E[dbt Raw Models]
+    E --> F[dbt Staging Models]
+    F --> G[Dimensional & Fact Models]
+    G --> H[Snapshots (SCD2) and Marts]
+    H --> I[Looker Studio Dashboards]
 ```
 
 ---
@@ -62,7 +63,63 @@ cd netflix_dbt_project
 ### 3. 🫒 Set Up Snowflake Roles, User, Warehouse, Schema, Stage, and Raw Tables
 
 ```sql
--- SQL code as previously detailed including CREATE ROLE, USER, STAGE, TABLES, and COPY INTO
+USE ROLE ACCOUNTADMIN;
+
+-- Create role and assign to ACCOUNTADMIN
+CREATE ROLE IF NOT EXISTS TRANSFORM;
+GRANT ROLE TRANSFORM TO ROLE ACCOUNTADMIN;
+
+-- Create compute warehouse
+CREATE WAREHOUSE IF NOT EXISTS COMPUTE_WH;
+GRANT OPERATE ON WAREHOUSE COMPUTE_WH TO ROLE TRANSFORM;
+
+-- Create user for dbt
+CREATE USER IF NOT EXISTS dbt
+  PASSWORD = 'dbtPassword123'
+  LOGIN_NAME = 'dbt'
+  MUST_CHANGE_PASSWORD = FALSE
+  DEFAULT_WAREHOUSE = COMPUTE_WH
+  DEFAULT_ROLE = TRANSFORM
+  DEFAULT_NAMESPACE = MOVIELENS.RAW
+  COMMENT = 'dbt user used for data transformation';
+ALTER USER dbt SET TYPE = LEGACY_SERVICE;
+GRANT ROLE TRANSFORM TO USER dbt;
+
+-- Create database and schema
+CREATE DATABASE IF NOT EXISTS MOVIELENS;
+CREATE SCHEMA IF NOT EXISTS MOVIELENS.RAW;
+
+-- Grant access to TRANSFORM role
+GRANT ALL ON WAREHOUSE COMPUTE_WH TO ROLE TRANSFORM;
+GRANT ALL ON DATABASE MOVIELENS TO ROLE TRANSFORM;
+GRANT ALL ON ALL SCHEMAS IN DATABASE MOVIELENS TO ROLE TRANSFORM;
+GRANT ALL ON FUTURE SCHEMAS IN DATABASE MOVIELENS TO ROLE TRANSFORM;
+GRANT ALL ON ALL TABLES IN SCHEMA MOVIELENS.RAW TO ROLE TRANSFORM;
+GRANT ALL ON FUTURE TABLES IN SCHEMA MOVIELENS.RAW TO ROLE TRANSFORM;
+
+-- Create stage to connect to S3
+CREATE STAGE netflixstage
+URL='s3://netflixdataset-srujan'
+CREDENTIALS=(AWS_KEY_ID='your_aws_key' AWS_SECRET_KEY='your_secret_key');
+
+-- Create raw tables and load data
+CREATE OR REPLACE TABLE raw_movies (movieId INTEGER, title STRING, genres STRING);
+COPY INTO raw_movies FROM '@netflixstage/movies.csv' FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1 FIELD_OPTIONALLY_ENCLOSED_BY = '"');
+
+CREATE OR REPLACE TABLE raw_ratings (userId INTEGER, movieId INTEGER, rating FLOAT, timestamp BIGINT);
+COPY INTO raw_ratings FROM '@netflixstage/ratings.csv' FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1 FIELD_OPTIONALLY_ENCLOSED_BY = '"');
+
+CREATE OR REPLACE TABLE raw_tags (userId INTEGER, movieId INTEGER, tag STRING, timestamp BIGINT);
+COPY INTO raw_tags FROM '@netflixstage/tags.csv' FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1 FIELD_OPTIONALLY_ENCLOSED_BY = '"') ON_ERROR = 'CONTINUE';
+
+CREATE OR REPLACE TABLE raw_genome_scores (movieId INTEGER, tagId INTEGER, relevance FLOAT);
+COPY INTO raw_genome_scores FROM '@netflixstage/genome-scores.csv' FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1 FIELD_OPTIONALLY_ENCLOSED_BY = '"');
+
+CREATE OR REPLACE TABLE raw_genome_tags (tagId INTEGER, tag STRING);
+COPY INTO raw_genome_tags FROM '@netflixstage/genome-tags.csv' FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1 FIELD_OPTIONALLY_ENCLOSED_BY = '"');
+
+CREATE OR REPLACE TABLE raw_Links (movieId INTEGER, imdbId INTEGER, tmdbId INTEGER);
+COPY INTO raw_Links FROM '@netflixstage/links.csv' FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1 FIELD_OPTIONALLY_ENCLOSED_BY = '"');
 ```
 
 ### 4. ⚙️ dbt Setup and Execution
