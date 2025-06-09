@@ -39,10 +39,10 @@ graph TD
   C --> D[Raw Tables via COPY INTO]
   D --> E[dbt Raw Layer]
   E --> F[Staging Layer]
-  F --> G[Dimensional & Fact Models]
-  G --> H[dbt Snapshots (SCD2)]
-  H --> I[Mart Layer]
-  I --> J[Looker Studio / Power BI / Tableau]
+  F --> G[Dimensional and Fact Models]
+  G --> H[Snapshots for SCD2 Tracking]
+  H --> I[Mart Models]
+  I --> J[Looker Studio / BI Tools]
 ```
 
 ---
