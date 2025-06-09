@@ -34,14 +34,15 @@ All files are stored in Amazon S3 under the `raw/` folder for ingestion into Sno
 
 ```mermaid
 graph TD
-    A[Netflix CSV Data] --> B[Amazon S3 (Raw Storage)]
-    B --> C[Snowflake Stage]
-    C --> D[Raw Tables via COPY INTO]
-    D --> E[dbt Raw Models]
-    E --> F[dbt Staging Models]
-    F --> G[Dimensional & Fact Models]
-    G --> H[Snapshots (SCD2) and Marts]
-    H --> I[Looker Studio Dashboards]
+  A[Netflix CSVs] --> B[Amazon S3 (Raw Data)]
+  B --> C[Snowflake External Stage]
+  C --> D[Raw Tables via COPY INTO]
+  D --> E[dbt Raw Layer]
+  E --> F[Staging Layer]
+  F --> G[Dimensional & Fact Models]
+  G --> H[dbt Snapshots (SCD2)]
+  H --> I[Mart Layer]
+  I --> J[Looker Studio / Power BI / Tableau]
 ```
 
 ---
