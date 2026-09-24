@@ -1,159 +1,105 @@
-# 🎮 Netflix Data Analytics Pipeline with dbt, Snowflake, S3, and Looker Studio
+# Netflix Analytics Pipeline — dbt + Snowflake + S3
 
-## 📌 Project Overview
+[![dbt](https://img.shields.io/badge/dbt-Cloud%20%7C%20Core-orange)](https://www.getdbt.com/)
+[![Snowflake](https://img.shields.io/badge/Snowflake-Data%20Cloud-blue)](https://www.snowflake.com/)
+[![AWS S3](https://img.shields.io/badge/AWS-S3-green)](https://aws.amazon.com/s3/)
 
-This project demonstrates a real-world data engineering pipeline that ingests, transforms, tests, and visualizes Netflix datasets. Built using Amazon S3, Snowflake, dbt, and Looker Studio, it simulates a modern analytics workflow using the ELT (Extract, Load, Transform) paradigm.
+An end-to-end ELT pipeline that ingests Netflix/MovieLens datasets from Amazon S3 into Snowflake and transforms raw data into analytics-ready models with dbt.
 
-Key features include:
+## What this project demonstrates
 
-* Cloud-based ingestion from Amazon S3 to Snowflake using COPY INTO
-* Role-based access control, warehouse provisioning, schema creation
-* Layered transformations using dbt (raw → staging → dim/fact → mart)
-* Over 14 dbt tests for data quality validation
-* SCD Type 2 implementation using dbt snapshots
-* Incremental model execution for source tables
-* Analytical dashboards in Looker Studio
+- Cloud ingestion: S3 → Snowflake via external stages and `COPY INTO`
+- Layered dbt modeling: raw → staging → dimensions/facts → marts
+- Slowly Changing Dimensions (SCD Type 2) with dbt snapshots
+- Incremental models for large, frequently-updated tables
+- 14+ dbt data-quality tests (uniqueness, not-null, referential integrity, accepted values)
+- Role-based access control and warehouse provisioning in Snowflake
 
----
-
-## 🗂️ Dataset Description
-
-The project uses open-source Netflix-style datasets in CSV format:
-
-* `movies.csv` – Movie ID, title, and genres
-* `ratings.csv` – User ratings with timestamps
-* `tags.csv` – User-submitted tags
-* `genome_scores.csv` and `genome_tags.csv` – Machine-generated tag relevance
-* `links.csv` – Movie IDs mapped to IMDb and TMDb
-
-All files are stored in Amazon S3 under the `raw/` folder for ingestion into Snowflake.
-
----
-
-## 🏧 Architecture Diagram
-
-Below is the high-level architecture of the Netflix Analytics Pipeline:
-
-* **Step 1:** Raw Netflix CSVs are extracted and stored in **Amazon S3**
-* **Step 2:** Snowflake uses an **external stage** to read data from S3
-* **Step 3:** Data is loaded into raw tables using **COPY INTO**
-* **Step 4:** dbt transforms the data through multiple layers: `raw` → `staging` → `fact/dim` → `mart`
-* **Step 5:** dbt snapshots track changes (SCD Type 2)
-* **Step 6:** Final data is served to **Looker Studio** or other BI tools for reporting
+## Architecture
 
 ```
 Netflix CSVs
-   ↓
-Amazon S3 (Raw Data)
-   ↓
-Snowflake External Stage
-   ↓
-Raw Tables (via COPY INTO)
-   ↓
-dbt Raw Models
-   ↓
-dbt Staging Models
-   ↓
-Dimensional & Fact Models
-   ↓
-dbt Snapshots (SCD Type 2)
-   ↓
-Mart Tables
-   ↓
-Looker Studio / Power BI / Tableau
+    ↓
+Amazon S3 (raw landing zone)
+    ↓
+Snowflake external stage
+    ↓
+Raw tables (COPY INTO)
+    ↓
+dbt staging models (cleaned, typed, renamed)
+    ↓
+Dimension & fact models
+    ↓
+dbt snapshots (SCD Type 2 history)
+    ↓
+Mart models (analysis-ready)
+    ↓
+BI layer (Looker Studio / Power BI / Tableau)
 ```
 
-This architecture ensures a clean ELT workflow using cloud-native tools.
+## Tech stack
 
----
+| Layer        | Tool                          |
+|--------------|-------------------------------|
+| Storage      | Amazon S3                     |
+| Warehouse    | Snowflake                     |
+| Transform    | dbt Core + dbt-snowflake      |
+| Language     | SQL, Python (venv)            |
+| Versioning   | Git                           |
+| BI           | Looker Studio                 |
 
-## 🔧 Step-by-Step Instructions
+## Dataset
 
-### 1. 🧪 Clone Repository
+Open-source MovieLens data (Netflix-style), stored as CSV in S3:
+
+| File | Contents |
+|------|----------|
+| `movies.csv` | Movie ID, title, genres |
+| `ratings.csv` | User ratings with timestamps |
+| `tags.csv` | User-submitted tags |
+| `genome_scores.csv` / `genome_tags.csv` | Tag relevance scores |
+| `links.csv` | Movie IDs mapped to IMDb / TMDb |
+
+## Getting started
+
+### Prerequisites
+
+- AWS account with an S3 bucket containing the CSV files
+- Snowflake account with `ACCOUNTADMIN` (or equivalent) access
+- Python 3.9+ and dbt Core
+
+### 1. Clone the repo
 
 ```bash
-git clone https://github.com/your-username/netflix_dbt_project.git
+git clone https://github.com/srujan2031/netflix_dbt_project.git
 cd netflix_dbt_project
 ```
 
-### 2. ☁️ Upload CSV Files to S3
+### 2. Upload data to S3
 
-* Create an S3 bucket (e.g., `netflixdataset-srujan`)
-* Upload all CSVs into the root folder of the bucket
+Upload all CSV files to your S3 bucket (e.g. `s3://netflixdataset-srujan/`).
 
-### 3. 🫒 Set Up Snowflake Roles, User, Warehouse, Schema, Stage, and Raw Tables
+### 3. Set up Snowflake
 
-```sql
-USE ROLE ACCOUNTADMIN;
+Run the statements in `snowflake_sql_commands.sql`. It provisions:
 
--- Create role and assign to ACCOUNTADMIN
-CREATE ROLE IF NOT EXISTS TRANSFORM;
-GRANT ROLE TRANSFORM TO ROLE ACCOUNTADMIN;
+- `TRANSFORM` role with least-privilege grants
+- `COMPUTE_WH` warehouse
+- `MOVIELENS` database with `RAW` schema
+- External stage pointing at your S3 bucket
+- Raw tables loaded via `COPY INTO`
 
--- Create compute warehouse
-CREATE WAREHOUSE IF NOT EXISTS COMPUTE_WH;
-GRANT OPERATE ON WAREHOUSE COMPUTE_WH TO ROLE TRANSFORM;
+> Credentials are passed via environment variables — never hardcoded. See `.env.example`.
 
--- Create user for dbt
-CREATE USER IF NOT EXISTS dbt
-  PASSWORD = 'dbtPassword123'
-  LOGIN_NAME = 'dbt'
-  MUST_CHANGE_PASSWORD = FALSE
-  DEFAULT_WAREHOUSE = COMPUTE_WH
-  DEFAULT_ROLE = TRANSFORM
-  DEFAULT_NAMESPACE = MOVIELENS.RAW
-  COMMENT = 'dbt user used for data transformation';
-ALTER USER dbt SET TYPE = LEGACY_SERVICE;
-GRANT ROLE TRANSFORM TO USER dbt;
-
--- Create database and schema
-CREATE DATABASE IF NOT EXISTS MOVIELENS;
-CREATE SCHEMA IF NOT EXISTS MOVIELENS.RAW;
-
--- Grant access to TRANSFORM role
-GRANT ALL ON WAREHOUSE COMPUTE_WH TO ROLE TRANSFORM;
-GRANT ALL ON DATABASE MOVIELENS TO ROLE TRANSFORM;
-GRANT ALL ON ALL SCHEMAS IN DATABASE MOVIELENS TO ROLE TRANSFORM;
-GRANT ALL ON FUTURE SCHEMAS IN DATABASE MOVIELENS TO ROLE TRANSFORM;
-GRANT ALL ON ALL TABLES IN SCHEMA MOVIELENS.RAW TO ROLE TRANSFORM;
-GRANT ALL ON FUTURE TABLES IN SCHEMA MOVIELENS.RAW TO ROLE TRANSFORM;
-
--- Create stage to connect to S3
-CREATE STAGE netflixstage
-URL='s3://netflixdataset-srujan'
-CREDENTIALS=(AWS_KEY_ID='your_aws_key' AWS_SECRET_KEY='your_secret_key');
-
--- Create raw tables and load data
-CREATE OR REPLACE TABLE raw_movies (movieId INTEGER, title STRING, genres STRING);
-COPY INTO raw_movies FROM '@netflixstage/movies.csv' FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1 FIELD_OPTIONALLY_ENCLOSED_BY = '"');
-
-CREATE OR REPLACE TABLE raw_ratings (userId INTEGER, movieId INTEGER, rating FLOAT, timestamp BIGINT);
-COPY INTO raw_ratings FROM '@netflixstage/ratings.csv' FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1 FIELD_OPTIONALLY_ENCLOSED_BY = '"');
-
-CREATE OR REPLACE TABLE raw_tags (userId INTEGER, movieId INTEGER, tag STRING, timestamp BIGINT);
-COPY INTO raw_tags FROM '@netflixstage/tags.csv' FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1 FIELD_OPTIONALLY_ENCLOSED_BY = '"') ON_ERROR = 'CONTINUE';
-
-CREATE OR REPLACE TABLE raw_genome_scores (movieId INTEGER, tagId INTEGER, relevance FLOAT);
-COPY INTO raw_genome_scores FROM '@netflixstage/genome-scores.csv' FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1 FIELD_OPTIONALLY_ENCLOSED_BY = '"');
-
-CREATE OR REPLACE TABLE raw_genome_tags (tagId INTEGER, tag STRING);
-COPY INTO raw_genome_tags FROM '@netflixstage/genome-tags.csv' FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1 FIELD_OPTIONALLY_ENCLOSED_BY = '"');
-
-CREATE OR REPLACE TABLE raw_Links (movieId INTEGER, imdbId INTEGER, tmdbId INTEGER);
-COPY INTO raw_Links FROM '@netflixstage/links.csv' FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1 FIELD_OPTIONALLY_ENCLOSED_BY = '"');
-```
-
-### 4. ⚙️ dbt Setup and Execution
-
-#### a. Install and Activate Virtual Environment
+### 4. Configure dbt
 
 ```bash
 python -m venv venv
-source venv/bin/activate  # On Windows use venv\Scripts\activate
+source venv/bin/activate
 pip install dbt-core dbt-snowflake
 ```
 
-#### b. Configure dbt Profile (`~/.dbt/profiles.yml`)
+Create `~/.dbt/profiles.yml`:
 
 ```yaml
 netflix_dbt_project:
@@ -161,80 +107,61 @@ netflix_dbt_project:
   outputs:
     dev:
       type: snowflake
-      account: <your_snowflake_account>
-      user: dbt
-      password: dbtPassword123
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
       role: TRANSFORM
       database: MOVIELENS
       warehouse: COMPUTE_WH
-      schema: RAW
+      schema: DEV
 ```
 
-#### c. Run dbt Workflow
+### 5. Run the pipeline
 
 ```bash
-dbt deps
-dbt seed  # if using any seed files
-dbt run   # runs all transformations including incremental models
-dbt snapshot  # captures historical changes using SCD2 logic
-dbt test  # applies dbt tests (nulls, referential integrity, etc.)
-dbt compile
+dbt deps        # install package dependencies
+dbt seed        # load seed files (if any)
+dbt run         # build all models (incremental where configured)
+dbt snapshot    # capture SCD Type 2 history
+dbt test        # run 14+ data-quality tests
 ```
 
-### 5. 📊 Visualize with Looker Studio
+### 6. Visualize
 
-* Add Snowflake as a data source
-* Connect to `MOVIELENS` database and `DEV` schema
-* Build charts with:
+Connect Looker Studio (or Power BI / Tableau) to the `MOVIELENS` database and build on the mart models: `movie_analysis`, `genre_rating_distribution`, `user_engagement_summary`, `tag_relevance_analysis`, `movie_release_trends`.
 
-  * `movie_analysis`
-  * `genre_rating_distribution`
-  * `user_engagement_summary`
-  * `tag_relevance_analysis`
-  * `movie_release_trends`
-
----
-
-## 👌 Key Enhancements
-
-* ✅ **Incremental Models**: Enabled for large tables like `src_ratings`
-* ✅ **Snapshots (SCD2)**: Historical tracking of user tag changes using dbt snapshots on `src_tags`
-* ✅ **Row-level testing**: Used queries to compare latest inserts and updates
-
-```sql
-SELECT * FROM MOVIELENS.DEV.FACT_RATINGS ORDER BY RATING_TIMESTAMP DESC LIMIT 5;
-SELECT * FROM MOVIELENS.DEV.SRC_RATINGS ORDER BY rating_timestamp DESC LIMIT 5;
-INSERT INTO MOVIELENS.DEV.SRC_RATINGS (user_id, movie_id, rating, rating_timestamp) VALUES (87587, 7151, '4.0', '2015-03-31 23:40:02.000 -0700');
-```
-
----
-
-## 📂 Folder Structure
+## Project structure
 
 ```
 netflix_dbt_project/
 ├── models/
-│   ├── raw/
-│   ├── staging/
-│   ├── dim/
-│   ├── fact/
-│   ├── mart/
-├── snapshots/
-├── macros/
-├── seeds/
-├── tests/
+│   ├── raw/          # source-aligned models
+│   ├── staging/      # cleaned, tested staging layer
+│   ├── dim/          # dimension tables
+│   ├── fact/         # fact tables
+│   └── mart/         # analysis-ready marts
+├── snapshots/        # SCD Type 2 snapshot definitions
+├── macros/           # reusable Jinja macros
+├── seeds/            # static seed data
+├── tests/            # custom data tests
 ├── dbt_project.yml
-├── packages.yml
-└── README.md
+└── snowflake_sql_commands.sql
 ```
 
----
+## Design decisions
 
-## ✅ Best Practices Followed
+- **Incremental models** on large tables (`src_ratings`) to avoid full refreshes on every run.
+- **dbt snapshots** on `src_tags` for SCD Type 2 change tracking without manual history tables.
+- **Layered modeling** (raw → staging → dim/fact → mart) so each layer has a single responsibility and failures are easy to isolate.
+- **Tests as contracts**: uniqueness, not-null, and relationship tests run on every `dbt test`, catching bad data before it reaches marts.
 
-* Role-based access control in Snowflake
-* Modular dbt folder structure (raw → staging → mart)
-* Incremental models for large, frequently changing datasets
-* dbt snapshot for slowly changing dimension (SCD Type 2)
-* Test coverage: uniqueness, nulls, referential integrity
-* Git version control for reproducibility and CI integration
+## Future improvements
+
+- [ ] CI with GitHub Actions (`dbt build` on every PR)
+- [ ] dbt docs site published via GitHub Pages
+- [ ] Airflow orchestration for scheduled runs
+
+## Author
+
+**Srujan Chinta** — Data Engineer
+[LinkedIn](https://www.linkedin.com/in/srujanchinta7) · srujanchinta7@gmail.com
